@@ -370,7 +370,7 @@
         let audioInitialized = false;
 
         // Function to create/unlock audio context within user gesture
-        function unlockAudio() {
+        async function unlockAudio() {
             // Create context within user gesture if it doesn't exist (critical for Safari iOS speakers)
             if (!audioContext) {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -386,20 +386,33 @@
                         hideAudioWarning();
                     }
                 });
+
+                // iOS Safari unlock: play silent buffer to "warm up" the context
+                try {
+                    const buffer = audioContext.createBuffer(1, 1, 22050);
+                    const source = audioContext.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(audioContext.destination);
+                    source.start(0);
+                    console.log('Silent buffer played to unlock iOS audio');
+                } catch (err) {
+                    console.error('Failed to play unlock buffer:', err);
+                }
             }
 
-            // Resume if suspended or interrupted
+            // Resume if suspended or interrupted - AWAIT this before continuing
             if (audioContext.state === 'suspended' || audioContext.state === 'interrupted') {
-                // Resume synchronously within user gesture - critical for Safari iOS
-                audioContext.resume().then(() => {
-                    console.log('AudioContext resumed successfully');
+                try {
+                    await audioContext.resume();
+                    console.log('AudioContext resumed successfully, state:', audioContext.state);
                     audioInitialized = true;
                     hideAudioWarning();
-                }).catch(err => {
+                } catch (err) {
                     console.error('Failed to resume AudioContext:', err);
                     showAudioWarning();
-                });
+                }
             } else if (audioContext.state === 'running') {
+                console.log('AudioContext already running');
                 audioInitialized = true;
                 hideAudioWarning();
             }
@@ -512,11 +525,11 @@
             return intervals[ratioString] || null;
         }
 
-        function playTone(frequency, button) {
+        async function playTone(frequency, button) {
             // Attempt to unlock audio on first interaction (Safari iOS requirement)
             if (!audioContext || !audioInitialized || audioContext.state !== 'running') {
-                unlockAudio();
-                // Show warning if unlock didn't work immediately
+                await unlockAudio();
+                // Check again after unlock attempt
                 if (!audioContext || audioContext.state !== 'running') {
                     showAudioWarning();
                     return;
