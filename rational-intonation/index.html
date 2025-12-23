@@ -307,6 +307,12 @@
         </div>
 
         <h2>GENERATED TONES</h2>
+        <div id="audioWarning" style="display: none; background: #ffeb3b; color: #000; padding: 15px; margin-bottom: 15px; border: 2px solid #000;">
+            <strong>⚠️ AUDIO INITIALIZATION REQUIRED</strong><br>
+            Click the button below to enable audio playback (required on iOS/Safari):
+            <br><br>
+            <button id="initAudioBtn" style="background: #000; color: #fff;">INITIALIZE AUDIO</button>
+        </div>
         <p style="margin-bottom: 15px;">Click any tone to play it. Display shows integer ratio relative to root frequency.</p>
         <div class="tone-grid" id="toneGrid"></div>
 
@@ -350,16 +356,41 @@
     </div>
 
     <script>
-        let audioContext;
+        // Create AudioContext immediately on page load (don't wait for user interaction)
+        let audioContext = new (window.AudioContext || window.webkitAudioContext)();
         let activeOscillators = new Map();
+        let audioInitialized = false;
 
-        async function initAudio() {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            // Resume audio context if suspended (required by browser autoplay policies)
+        // Function to unlock/resume audio context
+        function unlockAudio() {
             if (audioContext.state === 'suspended') {
-                await audioContext.resume();
+                // Resume synchronously within user gesture - critical for Safari iOS
+                audioContext.resume().then(() => {
+                    console.log('AudioContext resumed successfully');
+                    audioInitialized = true;
+                    hideAudioWarning();
+                }).catch(err => {
+                    console.error('Failed to resume AudioContext:', err);
+                });
+            } else {
+                audioInitialized = true;
+                hideAudioWarning();
+            }
+        }
+
+        function showAudioWarning() {
+            document.getElementById('audioWarning').style.display = 'block';
+        }
+
+        function hideAudioWarning() {
+            document.getElementById('audioWarning').style.display = 'none';
+        }
+
+        // Check if we need to show the audio warning
+        function checkAudioState() {
+            // Safari iOS typically starts in 'suspended' state
+            if (audioContext.state === 'suspended' && !audioInitialized) {
+                showAudioWarning();
             }
         }
 
@@ -416,8 +447,16 @@
             return `${numerator}/${denominator}`;
         }
 
-        async function playTone(frequency, button) {
-            await initAudio();
+        function playTone(frequency, button) {
+            // Attempt to unlock audio on first interaction (Safari iOS requirement)
+            if (!audioInitialized && audioContext.state === 'suspended') {
+                unlockAudio();
+                // Show warning if unlock didn't work immediately
+                if (audioContext.state === 'suspended') {
+                    showAudioWarning();
+                    return;
+                }
+            }
 
             // Stop if already playing
             if (activeOscillators.has(button)) {
@@ -425,22 +464,33 @@
                 return;
             }
 
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
+            // Don't try to play if context isn't running
+            if (audioContext.state !== 'running') {
+                showAudioWarning();
+                return;
+            }
 
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            try {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
 
-            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.05);
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
 
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
+                gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.05);
 
-            oscillator.start();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
 
-            activeOscillators.set(button, { oscillator, gainNode });
-            button.classList.add('playing');
+                oscillator.start();
+
+                activeOscillators.set(button, { oscillator, gainNode });
+                button.classList.add('playing');
+            } catch (err) {
+                console.error('Failed to play tone:', err);
+                showAudioWarning();
+            }
         }
 
         function stopTone(button) {
@@ -525,8 +575,17 @@
             });
         }
 
+        // Initialize audio button handler
+        document.getElementById('initAudioBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            unlockAudio();
+        });
+
         // Generate initial tones
         generateTones();
+
+        // Check audio state after page load
+        setTimeout(checkAudioState, 100);
 
         // Regenerate on input change
         document.getElementById('rootHz').addEventListener('input', generateTones);
@@ -540,6 +599,19 @@
                 });
             }
         });
+
+        // Also try to unlock audio on any user interaction (belt and suspenders approach)
+        document.addEventListener('touchstart', function tryUnlock() {
+            if (!audioInitialized && audioContext.state === 'suspended') {
+                unlockAudio();
+            }
+        }, { once: true });
+
+        document.addEventListener('click', function tryUnlock() {
+            if (!audioInitialized && audioContext.state === 'suspended') {
+                unlockAudio();
+            }
+        }, { once: true });
     </script>
 </body>
 </html>
