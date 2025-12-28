@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Spectrum Analyzer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #fff;
+            color: #000;
+            padding: 20px;
+            line-height: 1.6;
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: clamp(1.5rem, 5vw, 2.5rem);
+            border: 3px solid #000;
+            padding: 15px;
+            margin-bottom: 30px;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+
+        .subtitle {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: clamp(0.9rem, 3vw, 1rem);
+        }
+
+        .upload-section {
+            text-align: center;
+            padding: 40px;
+            border: 2px solid #000;
+            margin-bottom: 30px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-label {
+            display: inline-block;
+            padding: 15px 40px;
+            background: #000;
+            color: #fff;
+            cursor: pointer;
+            font-size: clamp(0.9rem, 3vw, 1.1rem);
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            transition: all 0.1s;
+        }
+
+        .file-label:hover {
+            background: #333;
+        }
+
+        .file-label:active {
+            transform: scale(0.98);
+        }
+
+        .file-name {
+            margin-top: 15px;
+            font-size: clamp(0.85rem, 3vw, 0.95rem);
+        }
+
+        .canvas-container {
+            margin: 30px 0;
+            text-align: center;
+            background: #000;
+            border: 2px solid #000;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+            max-height: 500px;
+        }
+
+        .frequencies-section {
+            margin-top: 30px;
+        }
+
+        .frequencies-section h2 {
+            font-size: clamp(1.2rem, 4vw, 1.8rem);
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin: 30px 0 15px 0;
+        }
+
+        .frequencies-section p {
+            margin-bottom: 15px;
+        }
+
+        .frequency-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .frequency-item {
+            background: #fff;
+            color: #000;
+            border: 2px solid #000;
+            padding: 15px;
+            text-align: left;
+            transition: all 0.1s;
+        }
+
+        .frequency-item:hover {
+            background: #000;
+            color: #fff;
+        }
+
+        .frequency-value {
+            font-size: clamp(1.2rem, 4vw, 1.5rem);
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .frequency-label {
+            font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+            opacity: 0.7;
+        }
+
+        .frequency-magnitude {
+            font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+            margin-top: 5px;
+            opacity: 0.6;
+        }
+
+        .info-section {
+            border: 2px solid #000;
+            padding: 15px;
+            margin-top: 40px;
+            font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+        }
+
+        .info-section h3 {
+            margin-bottom: 10px;
+            font-size: clamp(1rem, 3vw, 1.2rem);
+        }
+
+        .info-section p {
+            line-height: 1.6;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-size: clamp(0.9rem, 3vw, 1.2rem);
+            font-weight: bold;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .controls {
+            border: 2px solid #000;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            font-size: clamp(0.9rem, 3vw, 1rem);
+        }
+
+        .control-group input[type="number"] {
+            width: 100%;
+            background: #fff;
+            border: 2px solid #000;
+            color: #000;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+        }
+
+        .control-group input[type="range"] {
+            width: 100%;
+            height: 40px;
+            background: transparent;
+            margin-bottom: 10px;
+            cursor: pointer;
+            -webkit-appearance: none;
+        }
+
+        .control-group input[type="range"]::-webkit-slider-track {
+            width: 100%;
+            height: 8px;
+            background: #000;
+            border: 2px solid #000;
+        }
+
+        .control-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 30px;
+            width: 30px;
+            background: #000;
+            cursor: pointer;
+            border: 2px solid #000;
+        }
+
+        .control-group input[type="range"]::-moz-range-track {
+            width: 100%;
+            height: 8px;
+            background: #000;
+            border: 2px solid #000;
+        }
+
+        .control-group input[type="range"]::-moz-range-thumb {
+            height: 26px;
+            width: 26px;
+            background: #000;
+            cursor: pointer;
+            border: 2px solid #000;
+            border-radius: 0;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #666;
+        }
+
+        input[type="range"]:focus::-webkit-slider-thumb {
+            border-color: #666;
+        }
+
+        input[type="range"]:focus::-moz-range-thumb {
+            border-color: #666;
+        }
+
+        .control-group .value-display {
+            font-weight: bold;
+            padding: 8px 12px;
+            background: #f0f0f0;
+            border: 2px solid #000;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+
+        /* Dark mode */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #000;
+                color: #fff;
+            }
+
+            h1 {
+                border-color: #fff;
+            }
+
+            .subtitle {
+                color: #fff;
+            }
+
+            .upload-section {
+                border-color: #fff;
+            }
+
+            .file-label {
+                background: #fff;
+                color: #000;
+            }
+
+            .file-label:hover {
+                background: #ccc;
+            }
+
+            .canvas-container {
+                border-color: #fff;
+            }
+
+            .frequencies-section h2 {
+                border-bottom-color: #fff;
+            }
+
+            .frequency-item {
+                background: #000;
+                color: #fff;
+                border-color: #fff;
+            }
+
+            .frequency-item:hover {
+                background: #fff;
+                color: #000;
+            }
+
+            .info-section {
+                border-color: #fff;
+            }
+
+            .controls {
+                border-color: #fff;
+            }
+
+            .control-group input[type="number"] {
+                background: #000;
+                border-color: #fff;
+                color: #fff;
+            }
+
+            .control-group input[type="range"]::-webkit-slider-track {
+                background: #fff;
+                border-color: #fff;
+            }
+
+            .control-group input[type="range"]::-webkit-slider-thumb {
+                background: #fff;
+                border-color: #fff;
+            }
+
+            .control-group input[type="range"]::-moz-range-track {
+                background: #fff;
+                border-color: #fff;
+            }
+
+            .control-group input[type="range"]::-moz-range-thumb {
+                background: #fff;
+                border-color: #fff;
+            }
+
+            input:focus {
+                border-color: #999;
+            }
+
+            input[type="range"]:focus::-webkit-slider-thumb {
+                border-color: #999;
+            }
+
+            input[type="range"]:focus::-moz-range-thumb {
+                border-color: #999;
+            }
+
+            .control-group .value-display {
+                background: #1a1a1a;
+                border-color: #fff;
+            }
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+
+            .upload-section {
+                padding: 20px;
+            }
+
+            .controls {
+                padding: 10px;
+            }
+
+            .frequency-list {
+                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AUDIO SPECTRUM ANALYZER</h1>
+        <p class="subtitle">Discover the prominent frequencies in your audio recordings</p>
+
+        <div class="upload-section">
+            <input type="file" id="audioFile" class="file-input" accept="audio/wav,audio/wave,audio/*">
+            <label for="audioFile" class="file-label">CHOOSE WAV FILE</label>
+            <div class="file-name" id="fileName">No file selected</div>
+        </div>
+
+        <div class="controls hidden" id="controls">
+            <div class="control-group">
+                <label for="peakCount">NUMBER OF PEAKS</label>
+                <input type="number" id="peakCount" min="1" max="50" value="10">
+            </div>
+            <div class="control-group">
+                <label for="threshold">THRESHOLD</label>
+                <div class="value-display">CURRENT: <span id="thresholdValue">0.30</span></div>
+                <input type="range" id="threshold" min="0" max="1" step="0.01" value="0.3">
+            </div>
+        </div>
+
+        <div class="loading hidden" id="loading">Analyzing audio...</div>
+
+        <div class="canvas-container hidden" id="canvasContainer">
+            <canvas id="spectrogram"></canvas>
+        </div>
+
+        <div class="frequencies-section hidden" id="frequenciesSection">
+            <h2>PROMINENT FREQUENCIES</h2>
+            <p style="margin-bottom: 15px;">These are the dominant frequencies detected in your audio. You can use these as the foundation for musical scales.</p>
+            <div class="frequency-list" id="frequencyList"></div>
+        </div>
+
+        <div class="info-section">
+            <h3>HOW TO USE</h3>
+            <p>
+                1. Upload a WAV audio file using the button above<br>
+                2. The analyzer will process the audio and display a spectrogram (visual representation of frequencies over time)<br>
+                3. Prominent frequencies will be extracted and displayed below the spectrogram<br>
+                4. Use these frequencies as reference points to design musical scales or understand the harmonic content of your recording<br>
+                5. Adjust the threshold to control sensitivity of peak detection
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('audioFile');
+        const fileName = document.getElementById('fileName');
+        const loading = document.getElementById('loading');
+        const canvasContainer = document.getElementById('canvasContainer');
+        const canvas = document.getElementById('spectrogram');
+        const ctx = canvas.getContext('2d');
+        const frequenciesSection = document.getElementById('frequenciesSection');
+        const frequencyList = document.getElementById('frequencyList');
+        const controls = document.getElementById('controls');
+        const peakCountInput = document.getElementById('peakCount');
+        const thresholdInput = document.getElementById('threshold');
+        const thresholdValue = document.getElementById('thresholdValue');
+
+        let audioBuffer = null;
+        let audioContext = null;
+
+        thresholdInput.addEventListener('input', (e) => {
+            thresholdValue.textContent = parseFloat(e.target.value).toFixed(2);
+            if (audioBuffer) {
+                analyzeAudio(audioBuffer);
+            }
+        });
+
+        peakCountInput.addEventListener('change', () => {
+            if (audioBuffer) {
+                analyzeAudio(audioBuffer);
+            }
+        });
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            fileName.textContent = file.name;
+            loading.classList.remove('hidden');
+            canvasContainer.classList.add('hidden');
+            frequenciesSection.classList.add('hidden');
+            controls.classList.remove('hidden');
+
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await file.arrayBuffer();
+                audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                await analyzeAudio(audioBuffer);
+            } catch (error) {
+                console.error('Error processing audio:', error);
+                alert('Error processing audio file. Please make sure it\'s a valid WAV file.');
+                loading.classList.add('hidden');
+            }
+        });
+
+        async function analyzeAudio(buffer) {
+            loading.classList.remove('hidden');
+
+            // Create spectrogram
+            const spectrogram = createSpectrogram(buffer);
+
+            // Draw spectrogram
+            drawSpectrogram(spectrogram, buffer.sampleRate);
+
+            // Find prominent frequencies
+            const frequencies = findProminentFrequencies(spectrogram, buffer.sampleRate);
+
+            // Display frequencies
+            displayFrequencies(frequencies);
+
+            loading.classList.add('hidden');
+            canvasContainer.classList.remove('hidden');
+            frequenciesSection.classList.remove('hidden');
+        }
+
+        function createSpectrogram(buffer) {
+            const channelData = buffer.getChannelData(0); // Use first channel
+            const fftSize = 4096; // Larger FFT for better frequency resolution
+            const hopSize = Math.floor(fftSize / 4);
+            const windowCount = Math.floor((channelData.length - fftSize) / hopSize);
+
+            const spectrogram = [];
+
+            for (let i = 0; i < windowCount; i++) {
+                const offset = i * hopSize;
+                const segment = channelData.slice(offset, offset + fftSize);
+
+                // Apply Hanning window
+                const windowed = applyHanningWindow(segment);
+
+                // Perform FFT
+                const fftResult = performFFT(windowed);
+
+                // Get magnitude spectrum (only first half due to symmetry)
+                const magnitudes = fftResult.slice(0, fftSize / 2).map(c =>
+                    Math.sqrt(c.real * c.real + c.imag * c.imag)
+                );
+
+                spectrogram.push(magnitudes);
+            }
+
+            return spectrogram;
+        }
+
+        function applyHanningWindow(signal) {
+            const windowed = new Float32Array(signal.length);
+            for (let i = 0; i < signal.length; i++) {
+                const multiplier = 0.5 * (1 - Math.cos(2 * Math.PI * i / (signal.length - 1)));
+                windowed[i] = signal[i] * multiplier;
+            }
+            return windowed;
+        }
+
+        function performFFT(signal) {
+            const n = signal.length;
+            const complex = Array.from(signal, val => ({ real: val, imag: 0 }));
+
+            // Cooley-Tukey FFT algorithm
+            fftRecursive(complex);
+
+            return complex;
+        }
+
+        function fftRecursive(x) {
+            const n = x.length;
+
+            if (n <= 1) return x;
+
+            // Bit-reversal permutation
+            for (let i = 0; i < n; i++) {
+                const j = reverseBits(i, Math.log2(n));
+                if (j > i) {
+                    [x[i], x[j]] = [x[j], x[i]];
+                }
+            }
+
+            // Iterative FFT
+            for (let size = 2; size <= n; size *= 2) {
+                const halfSize = size / 2;
+                const step = 2 * Math.PI / size;
+
+                for (let i = 0; i < n; i += size) {
+                    for (let j = 0; j < halfSize; j++) {
+                        const angle = step * j;
+                        const wr = Math.cos(angle);
+                        const wi = -Math.sin(angle);
+
+                        const even = x[i + j];
+                        const odd = x[i + j + halfSize];
+
+                        const tr = odd.real * wr - odd.imag * wi;
+                        const ti = odd.real * wi + odd.imag * wr;
+
+                        x[i + j] = {
+                            real: even.real + tr,
+                            imag: even.imag + ti
+                        };
+
+                        x[i + j + halfSize] = {
+                            real: even.real - tr,
+                            imag: even.imag - ti
+                        };
+                    }
+                }
+            }
+        }
+
+        function reverseBits(num, bits) {
+            let result = 0;
+            for (let i = 0; i < bits; i++) {
+                result = (result << 1) | (num & 1);
+                num >>= 1;
+            }
+            return result;
+        }
+
+        function drawSpectrogram(spectrogram, sampleRate) {
+            const width = 1200;
+            const height = 600;
+            canvas.width = width;
+            canvas.height = height;
+
+            const timeSteps = spectrogram.length;
+            const freqBins = spectrogram[0].length;
+
+            // Find max magnitude for normalization
+            let maxMag = 0;
+            for (let t = 0; t < timeSteps; t++) {
+                for (let f = 0; f < freqBins; f++) {
+                    maxMag = Math.max(maxMag, spectrogram[t][f]);
+                }
+            }
+
+            // Draw spectrogram
+            const pixelWidth = width / timeSteps;
+            const pixelHeight = height / freqBins;
+
+            for (let t = 0; t < timeSteps; t++) {
+                for (let f = 0; f < freqBins; f++) {
+                    // Normalize and apply log scale for better visualization
+                    const normalized = spectrogram[t][f] / maxMag;
+                    const dbValue = 20 * Math.log10(normalized + 1e-10);
+                    const intensity = Math.max(0, (dbValue + 60) / 60); // -60dB to 0dB range
+
+                    // Color mapping (blue to red)
+                    const hue = (1 - intensity) * 240; // 240 (blue) to 0 (red)
+                    const saturation = 100;
+                    const lightness = intensity * 50;
+
+                    ctx.fillStyle = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+                    ctx.fillRect(
+                        t * pixelWidth,
+                        height - (f + 1) * pixelHeight, // Flip vertically
+                        Math.ceil(pixelWidth),
+                        Math.ceil(pixelHeight)
+                    );
+                }
+            }
+
+            // Add frequency labels
+            ctx.fillStyle = 'white';
+            ctx.font = '12px "Courier New", monospace';
+            const labelFreqs = [100, 500, 1000, 2000, 5000, 10000];
+            labelFreqs.forEach(freq => {
+                if (freq < sampleRate / 2) {
+                    const binIndex = Math.floor(freq / (sampleRate / 2) * freqBins);
+                    const y = height - binIndex * pixelHeight;
+                    ctx.fillText(`${freq} Hz`, 5, y);
+                }
+            });
+        }
+
+        function findProminentFrequencies(spectrogram, sampleRate) {
+            const fftSize = spectrogram[0].length * 2; // Original FFT size
+            const freqResolution = sampleRate / fftSize;
+
+            // Average magnitude across all time steps for each frequency bin
+            const avgSpectrum = new Float32Array(spectrogram[0].length);
+            for (let f = 0; f < spectrogram[0].length; f++) {
+                let sum = 0;
+                for (let t = 0; t < spectrogram.length; t++) {
+                    sum += spectrogram[t][f];
+                }
+                avgSpectrum[f] = sum / spectrogram.length;
+            }
+
+            // Find peaks
+            const peaks = [];
+            const threshold = parseFloat(thresholdInput.value);
+            const maxMagnitude = Math.max(...avgSpectrum);
+
+            for (let i = 2; i < avgSpectrum.length - 2; i++) {
+                const current = avgSpectrum[i];
+
+                // Check if it's a local maximum and above threshold
+                if (current > avgSpectrum[i - 1] &&
+                    current > avgSpectrum[i + 1] &&
+                    current > avgSpectrum[i - 2] &&
+                    current > avgSpectrum[i + 2] &&
+                    current > threshold * maxMagnitude) {
+
+                    const frequency = i * freqResolution;
+                    peaks.push({
+                        frequency: frequency,
+                        magnitude: current,
+                        bin: i
+                    });
+                }
+            }
+
+            // Sort by magnitude and take top N
+            const numPeaks = parseInt(peakCountInput.value);
+            peaks.sort((a, b) => b.magnitude - a.magnitude);
+            return peaks.slice(0, numPeaks);
+        }
+
+        function displayFrequencies(frequencies) {
+            frequencyList.innerHTML = '';
+
+            frequencies.forEach((freq, index) => {
+                const item = document.createElement('div');
+                item.className = 'frequency-item';
+
+                const value = document.createElement('div');
+                value.className = 'frequency-value';
+                value.textContent = `${freq.frequency.toFixed(1)} Hz`;
+
+                const label = document.createElement('div');
+                label.className = 'frequency-label';
+                label.textContent = `Peak ${index + 1}`;
+
+                const magnitude = document.createElement('div');
+                magnitude.className = 'frequency-magnitude';
+                const relMagnitude = (freq.magnitude / frequencies[0].magnitude * 100).toFixed(1);
+                magnitude.textContent = `Magnitude: ${relMagnitude}%`;
+
+                item.appendChild(value);
+                item.appendChild(label);
+                item.appendChild(magnitude);
+
+                frequencyList.appendChild(item);
+            });
+        }
+    </script>
+</body>
+</html>
