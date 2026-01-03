@@ -240,6 +240,72 @@
             margin-top: 2px;
         }
 
+        .pitch-controls {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #ccc;
+        }
+
+        .pitch-control {
+            margin-bottom: 8px;
+        }
+
+        .pitch-control:last-child {
+            margin-bottom: 0;
+        }
+
+        .pitch-control label {
+            display: block;
+            font-size: clamp(0.7rem, 2vw, 0.75rem);
+            margin-bottom: 4px;
+            opacity: 0.8;
+        }
+
+        .pitch-control input[type="range"] {
+            width: 100%;
+            height: 24px;
+            background: transparent;
+            cursor: pointer;
+            -webkit-appearance: none;
+        }
+
+        .pitch-control input[type="range"]::-webkit-slider-track {
+            width: 100%;
+            height: 4px;
+            background: #666;
+            border: 1px solid #666;
+        }
+
+        .pitch-control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            background: #000;
+            cursor: pointer;
+            border: 1px solid #000;
+        }
+
+        .pitch-control input[type="range"]::-moz-range-track {
+            width: 100%;
+            height: 4px;
+            background: #666;
+            border: 1px solid #666;
+        }
+
+        .pitch-control input[type="range"]::-moz-range-thumb {
+            height: 14px;
+            width: 14px;
+            background: #000;
+            cursor: pointer;
+            border: 1px solid #000;
+            border-radius: 0;
+        }
+
+        .pitch-control .value-inline {
+            font-size: clamp(0.65rem, 1.8vw, 0.7rem);
+            opacity: 0.7;
+        }
+
         .research {
             border: 2px solid #000;
             padding: 15px;
@@ -392,6 +458,30 @@
                 background: #000;
                 color: #fff;
             }
+
+            .pitch-controls {
+                border-top-color: #666;
+            }
+
+            .pitch-control input[type="range"]::-webkit-slider-track {
+                background: #999;
+                border-color: #999;
+            }
+
+            .pitch-control input[type="range"]::-webkit-slider-thumb {
+                background: #fff;
+                border-color: #fff;
+            }
+
+            .pitch-control input[type="range"]::-moz-range-track {
+                background: #999;
+                border-color: #999;
+            }
+
+            .pitch-control input[type="range"]::-moz-range-thumb {
+                background: #fff;
+                border-color: #fff;
+            }
         }
 
         @media (max-width: 600px) {
@@ -463,6 +553,19 @@
                 Controls how long tones take to fade in when pressed and fade out when released.<br>
                 Range: 0ms (instant) to 10000ms (10 seconds)<br>
                 Default: 100ms
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label for="masterAmplitude">MASTER AMPLITUDE (ALL PITCHES)</label>
+            <div class="current-value">
+                <span class="current-value-label">CURRENT: </span><span id="masterAmplitudeValue">0.30</span>
+            </div>
+            <input type="range" id="masterAmplitude" min="0" max="1" step="0.01" value="0.3">
+            <div class="piano-reference">
+                Controls the overall volume for all generated tones.<br>
+                Range: 0.00 (silent) to 1.00 (maximum)<br>
+                Default: 0.30
             </div>
         </div>
 
@@ -583,6 +686,8 @@
         let currentAppliedRootHz = 440;
         let currentAppliedRatio = '1.5';
         let fadeTimeMs = 100; // Default fade time in milliseconds
+        let pitchSettings = new Map(); // Store pan and amplitude for each pitch
+        let masterAmplitude = 0.3; // Master volume for all pitches
 
         // Function to create/unlock audio context within user gesture
         async function unlockAudio() {
@@ -837,20 +942,31 @@
             try {
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
+                const panNode = audioContext.createStereoPanner();
 
                 oscillator.type = 'sine';
                 oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
 
+                // Get settings for this pitch
+                const settings = pitchSettings.get(frequency) || { pan: 0, amplitude: 1.0 };
+
+                // Set pan
+                panNode.pan.setValueAtTime(settings.pan, audioContext.currentTime);
+
+                // Calculate final gain: individual amplitude * master amplitude
+                const targetGain = settings.amplitude * masterAmplitude;
+
                 const fadeTimeSec = fadeTimeMs / 1000; // Convert milliseconds to seconds
                 gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-                gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + fadeTimeSec);
+                gainNode.gain.linearRampToValueAtTime(targetGain, audioContext.currentTime + fadeTimeSec);
 
                 oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
+                gainNode.connect(panNode);
+                panNode.connect(audioContext.destination);
 
                 oscillator.start();
 
-                activeOscillators.set(button, { oscillator, gainNode });
+                activeOscillators.set(button, { oscillator, gainNode, panNode });
                 button.classList.add('playing');
             } catch (err) {
                 console.error('Failed to play tone:', err);
@@ -938,7 +1054,7 @@
 
             if (modeRatios) {
                 // Generate tones based on the selected mode
-                modeRatios.forEach((interval) => {
+                modeRatios.forEach((interval, index) => {
                     const ratioValue = parseRatio(interval.ratio);
                     const freq = rootHz * ratioValue;
 
@@ -965,7 +1081,88 @@
                     intervalDisplay.textContent = interval.name;
                     button.appendChild(intervalDisplay);
 
-                    button.addEventListener('click', () => {
+                    // Initialize settings for this pitch if not exists
+                    if (!pitchSettings.has(freq)) {
+                        pitchSettings.set(freq, {
+                            pan: 0,      // -1 (left) to 1 (right)
+                            amplitude: 1.0  // 0 to 1
+                        });
+                    }
+
+                    // Create controls container
+                    const controlsContainer = document.createElement('div');
+                    controlsContainer.className = 'pitch-controls';
+
+                    // Pan control
+                    const panControl = document.createElement('div');
+                    panControl.className = 'pitch-control';
+                    const panLabel = document.createElement('label');
+                    panLabel.innerHTML = `PAN <span class="value-inline" id="pan-value-mode-${index}">(C)</span>`;
+                    const panInput = document.createElement('input');
+                    panInput.type = 'range';
+                    panInput.min = '-1';
+                    panInput.max = '1';
+                    panInput.step = '0.01';
+                    panInput.value = '0';
+                    panInput.addEventListener('input', (e) => {
+                        const panValue = parseFloat(e.target.value);
+                        pitchSettings.get(freq).pan = panValue;
+                        const panValueSpan = document.getElementById(`pan-value-mode-${index}`);
+                        if (panValue < -0.05) {
+                            panValueSpan.textContent = `(L${Math.abs(panValue).toFixed(2)})`;
+                        } else if (panValue > 0.05) {
+                            panValueSpan.textContent = `(R${panValue.toFixed(2)})`;
+                        } else {
+                            panValueSpan.textContent = '(C)';
+                        }
+                        // Update if currently playing
+                        if (activeOscillators.has(button)) {
+                            const nodes = activeOscillators.get(button);
+                            if (nodes.panNode) {
+                                nodes.panNode.pan.setValueAtTime(panValue, audioContext.currentTime);
+                            }
+                        }
+                        e.stopPropagation();
+                    });
+                    panControl.appendChild(panLabel);
+                    panControl.appendChild(panInput);
+
+                    // Amplitude control
+                    const ampControl = document.createElement('div');
+                    ampControl.className = 'pitch-control';
+                    const ampLabel = document.createElement('label');
+                    ampLabel.innerHTML = `AMPLITUDE <span class="value-inline" id="amp-value-mode-${index}">1.00</span>`;
+                    const ampInput = document.createElement('input');
+                    ampInput.type = 'range';
+                    ampInput.min = '0';
+                    ampInput.max = '1';
+                    ampInput.step = '0.01';
+                    ampInput.value = '1';
+                    ampInput.addEventListener('input', (e) => {
+                        const ampValue = parseFloat(e.target.value);
+                        pitchSettings.get(freq).amplitude = ampValue;
+                        document.getElementById(`amp-value-mode-${index}`).textContent = ampValue.toFixed(2);
+                        // Update if currently playing
+                        if (activeOscillators.has(button)) {
+                            const nodes = activeOscillators.get(button);
+                            if (nodes.gainNode) {
+                                const targetGain = ampValue * masterAmplitude;
+                                nodes.gainNode.gain.setValueAtTime(targetGain, audioContext.currentTime);
+                            }
+                        }
+                        e.stopPropagation();
+                    });
+                    ampControl.appendChild(ampLabel);
+                    ampControl.appendChild(ampInput);
+
+                    controlsContainer.appendChild(panControl);
+                    controlsContainer.appendChild(ampControl);
+                    button.appendChild(controlsContainer);
+
+                    button.addEventListener('click', (e) => {
+                        // Don't toggle if clicking on controls
+                        if (e.target.tagName === 'INPUT') return;
+
                         if (activeOscillators.has(button)) {
                             stopTone(button);
                         } else {
@@ -998,7 +1195,7 @@
                     [1, 4], // 1*A + 4*B
                 ];
 
-                combinations.forEach(([m, n]) => {
+                combinations.forEach(([m, n], index) => {
                     const freq = m * rootHz + n * (rootHz * ratio);
 
                     // Skip if frequency is out of audible range
@@ -1031,7 +1228,88 @@
                         button.appendChild(intervalDisplay);
                     }
 
-                    button.addEventListener('click', () => {
+                    // Initialize settings for this pitch if not exists
+                    if (!pitchSettings.has(freq)) {
+                        pitchSettings.set(freq, {
+                            pan: 0,      // -1 (left) to 1 (right)
+                            amplitude: 1.0  // 0 to 1
+                        });
+                    }
+
+                    // Create controls container
+                    const controlsContainer = document.createElement('div');
+                    controlsContainer.className = 'pitch-controls';
+
+                    // Pan control
+                    const panControl = document.createElement('div');
+                    panControl.className = 'pitch-control';
+                    const panLabel = document.createElement('label');
+                    panLabel.innerHTML = `PAN <span class="value-inline" id="pan-value-free-${index}">(C)</span>`;
+                    const panInput = document.createElement('input');
+                    panInput.type = 'range';
+                    panInput.min = '-1';
+                    panInput.max = '1';
+                    panInput.step = '0.01';
+                    panInput.value = '0';
+                    panInput.addEventListener('input', (e) => {
+                        const panValue = parseFloat(e.target.value);
+                        pitchSettings.get(freq).pan = panValue;
+                        const panValueSpan = document.getElementById(`pan-value-free-${index}`);
+                        if (panValue < -0.05) {
+                            panValueSpan.textContent = `(L${Math.abs(panValue).toFixed(2)})`;
+                        } else if (panValue > 0.05) {
+                            panValueSpan.textContent = `(R${panValue.toFixed(2)})`;
+                        } else {
+                            panValueSpan.textContent = '(C)';
+                        }
+                        // Update if currently playing
+                        if (activeOscillators.has(button)) {
+                            const nodes = activeOscillators.get(button);
+                            if (nodes.panNode) {
+                                nodes.panNode.pan.setValueAtTime(panValue, audioContext.currentTime);
+                            }
+                        }
+                        e.stopPropagation();
+                    });
+                    panControl.appendChild(panLabel);
+                    panControl.appendChild(panInput);
+
+                    // Amplitude control
+                    const ampControl = document.createElement('div');
+                    ampControl.className = 'pitch-control';
+                    const ampLabel = document.createElement('label');
+                    ampLabel.innerHTML = `AMPLITUDE <span class="value-inline" id="amp-value-free-${index}">1.00</span>`;
+                    const ampInput = document.createElement('input');
+                    ampInput.type = 'range';
+                    ampInput.min = '0';
+                    ampInput.max = '1';
+                    ampInput.step = '0.01';
+                    ampInput.value = '1';
+                    ampInput.addEventListener('input', (e) => {
+                        const ampValue = parseFloat(e.target.value);
+                        pitchSettings.get(freq).amplitude = ampValue;
+                        document.getElementById(`amp-value-free-${index}`).textContent = ampValue.toFixed(2);
+                        // Update if currently playing
+                        if (activeOscillators.has(button)) {
+                            const nodes = activeOscillators.get(button);
+                            if (nodes.gainNode) {
+                                const targetGain = ampValue * masterAmplitude;
+                                nodes.gainNode.gain.setValueAtTime(targetGain, audioContext.currentTime);
+                            }
+                        }
+                        e.stopPropagation();
+                    });
+                    ampControl.appendChild(ampLabel);
+                    ampControl.appendChild(ampInput);
+
+                    controlsContainer.appendChild(panControl);
+                    controlsContainer.appendChild(ampControl);
+                    button.appendChild(controlsContainer);
+
+                    button.addEventListener('click', (e) => {
+                        // Don't toggle if clicking on controls
+                        if (e.target.tagName === 'INPUT') return;
+
                         if (activeOscillators.has(button)) {
                             stopTone(button);
                         } else {
@@ -1094,6 +1372,26 @@
         document.getElementById('fadeTime').addEventListener('input', (e) => {
             fadeTimeMs = parseInt(e.target.value);
             document.getElementById('currentFadeTime').textContent = fadeTimeMs;
+        });
+
+        // Master amplitude event listener
+        const masterAmplitudeInput = document.getElementById('masterAmplitude');
+        const masterAmplitudeValue = document.getElementById('masterAmplitudeValue');
+        masterAmplitudeInput.addEventListener('input', (e) => {
+            masterAmplitude = parseFloat(e.target.value);
+            masterAmplitudeValue.textContent = masterAmplitude.toFixed(2);
+
+            // Update all currently playing oscillators
+            activeOscillators.forEach((nodes, button) => {
+                if (nodes.gainNode) {
+                    // Get the frequency from the button
+                    const freqText = button.querySelector('.freq-display').textContent;
+                    const frequency = parseFloat(freqText);
+                    const settings = pitchSettings.get(frequency) || { amplitude: 1.0 };
+                    const targetGain = settings.amplitude * masterAmplitude;
+                    nodes.gainNode.gain.setValueAtTime(targetGain, audioContext.currentTime);
+                }
+            });
         });
 
         // Mode select event listener
