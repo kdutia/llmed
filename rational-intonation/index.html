@@ -980,11 +980,10 @@
                 const { oscillator, gainNode } = nodes;
                 const fadeTimeSec = fadeTimeMs / 1000; // Convert milliseconds to seconds
 
-                // Cancel any scheduled changes and set current value
-                gainNode.gain.cancelScheduledValues(audioContext.currentTime);
-                gainNode.gain.setValueAtTime(gainNode.gain.value, audioContext.currentTime);
+                // Cancel scheduled changes and hold at current value
+                gainNode.gain.cancelAndHoldAtTime(audioContext.currentTime);
 
-                // Now ramp to zero
+                // Now ramp to zero from wherever we are
                 gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeTimeSec);
                 oscillator.stop(audioContext.currentTime + fadeTimeSec);
                 activeOscillators.delete(button);
